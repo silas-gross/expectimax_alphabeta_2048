@@ -13,6 +13,7 @@ class PlayerAI(BaseAI):
     a=0.2
     b=0.5 #equal weights for right now, need to figure out how I want to loop over these 
     wm=[]
+    good_move=None
     #value chosen for weight matrix to make the anchoring outweigh 
     #this was tuned a little bit/worked out by hand on smaller scales
     def empty_cells(self, grid):
@@ -102,23 +103,58 @@ class PlayerAI(BaseAI):
         #idea is to implement s.t. IDS can be used 
         #default searching to depth 1
         #output to dictionary to 
-        good_move=None
         moveset=grid.getAvailableMoves()
         cs=self.generate_player_children(moveset, grid)
-        if depth=0 and found_move:
+        if depth=0 and found_move or time.process_time >= self.t_end:
             utility=self.util(grid)
             output={"alpha": alpha, 
                     "beta": beta,
-                    "move": good_move, 
+                    "move": self.good_move, 
                     "utility": utility}
             return output
 
         if found_move:
             for c in cs:
-                d=expectimax(c[1], depth-1)
+                d=expectimax(c[1], depth-1, alpha, beta)
                 alpha=max(alpha, d["alpha"])
         else:
+            for c in cs:
+                l=c[1]
+                o=chance_node(l, depth+1, alpha, beta)
+                if o> alpha:
+                    self.good_move=c[0]
+                alpha=max(alpha, o)
+                if beta<= alpha:
+                    found_move=true
+                    utility=self.util(grid)
+                    output={"alpha": alpha,
+                    "beta": beta,
+                    "move": self.good_move,
+                    "utility": utility}
+            return output
 
+            
+    def chance_node(self, l, depth, alpha, beta):
+                empty=l.getAvailableCells()
+                n_empty=len(empty)
+                chance_2=(0.9*(1/n_empty))
+                chance_4=(0.1*(1/n_empty))
+                #nodes are set up by inserting the chance nodes
+                for e in empty:
+                    lc2=l.clone()
+                    lc4=l.clone()
+                    lc2.insertTile(e,2)
+                    lc4.insertTile(e,4)
+                    #create grids with inserted of 2, 4
+                    s2=self.expectimax(lc2, depth-1, alpha, beta, True)
+                    s4=self.expectimax(lc4, depth-1, alpha, beta, True)
+                    u=s2["utility"]*chance_2+s4["utility"]*chance_4
+                    beta=min(beta, u)
+                    if alpha >= beta:
+                        break
+                return beta
+                    #stores the children with the relevant chance
+                    
     def generate_player_children(self, moveset, grid):
         children_grids=[]
         for m in moveset:
