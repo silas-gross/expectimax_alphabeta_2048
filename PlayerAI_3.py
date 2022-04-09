@@ -105,7 +105,7 @@ class PlayerAI(BaseAI):
         #output to dictionary to 
         moveset=grid.getAvailableMoves()
         cs=self.generate_player_children(moveset, grid)
-        if depth=0 and found_move or time.process_time >= self.t_end:
+        if depth==0 and found_move or time.process_time() >= self.t_end:
             utility=self.util(grid)
             output={"alpha": alpha, 
                     "beta": beta,
@@ -114,22 +114,36 @@ class PlayerAI(BaseAI):
             return output
 
         if found_move:
+            utility=self.util(grid)
             for c in cs:
-                d=expectimax(c[1], depth-1, alpha, beta)
+                d=self.expectimax(c[1], depth-1, alpha, beta)
                 alpha=max(alpha, d["alpha"])
+                utility=self.util(c[1])
+                if alpha >=beta:
+                    self.good_move=c[0]
+                    break
+            output={"alpha": alpha,
+                    "beta": beta,
+                    "move": self.good_move[0],
+                    "utility": utility}
+            return output
+
         else:
+            utility=self.util(grid)
             for c in cs:
                 l=c[1]
-                o=chance_node(l, depth+1, alpha, beta)
+                o=self.chance_node(l, depth+1, alpha, beta)
+                utility=self.util(l)
                 if o> alpha:
                     self.good_move=c[0]
                 alpha=max(alpha, o)
                 if beta<= alpha:
-                    found_move=true
-                    utility=self.util(grid)
-                    output={"alpha": alpha,
+                    found_move=True
+                    break
+
+            output={"alpha": alpha,
                     "beta": beta,
-                    "move": self.good_move,
+                    "move": self.good_move[0],
                     "utility": utility}
             return output
 
@@ -137,6 +151,9 @@ class PlayerAI(BaseAI):
     def chance_node(self, l, depth, alpha, beta):
                 empty=l.getAvailableCells()
                 n_empty=len(empty)
+                if n_empty==0:
+                    o=self.expectimax(l, depth-1, alpha, beta, True)
+                    return o["utility"]
                 chance_2=(0.9*(1/n_empty))
                 chance_4=(0.1*(1/n_empty))
                 #nodes are set up by inserting the chance nodes
@@ -167,7 +184,7 @@ class PlayerAI(BaseAI):
         self.t_end=time.process_time()+0.15
         self.s=grid.size
         self.wm=[[pow(self.s, i+j) for i in range(self.s)] for j in range(self.s)] 
-        move,_=self.expectimax(grid)
-        return move[0]
+        move=self.expectimax(grid)
+        return move["move"]
     	#moveset = grid.getAvailableMoves()
     	#return best_move(moveset, grid) if moveset else None
