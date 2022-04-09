@@ -10,16 +10,16 @@ import time
 class PlayerAI(BaseAI):
     s=0
     t_end=None
-    a=0.0
-    b=1.0 #equal weights for right now, need to figure out how I want to loop over these 
+    a=0.2
+    b=0.5 #equal weights for right now, need to figure out how I want to loop over these 
     wm=[]
     #value chosen for weight matrix to make the anchoring outweigh 
     #this was tuned a little bit/worked out by hand on smaller scales
     def empty_cells(self, grid):
         a= grid.getAvailableCells()
         u=len(a)
-        #the cost is set as the number of non-zero spaces
-        #cost to merge all cells if all cells are of equal value
+        u=u/pow(self.s,2)
+        #the util is set as the number of non-zero spaces
         return u
     def monocity(self, grid):
         util=0 #utility associated is given by the size of the jump
@@ -30,9 +30,8 @@ class PlayerAI(BaseAI):
                     u=grid.getCellValue([x+1, y])
                     if u==0 or v==0 or v==u:
                         continue
-                    if v<u:
-                        c= u/v
-                        util+=math.log(c,2) 
+                    c= u/v
+                    util+=math.log(c,2) 
                     #util increases by powers of 2 
                     #penalty of the power
                     #this would be the number of necessary moves to keep merge the two without having to build any extras 
@@ -51,13 +50,27 @@ class PlayerAI(BaseAI):
                     u=grid.getCellValue([x, y+1])
                     if u==0 or v==0 or v==u:
                         continue
-                    if v<u:
-                        c= u/v
-                        util+= math.log(c,2)
+                    c= u/v
+                    util+= math.log(c,2)
                         #this would be the number of necessary moves to keep merge the two without having to build any extras
                 else:
                     continue
         #summing over these costs gives minimum number of moves to merge all cells-1 
+        #normalize by getting value if all are in proper order
+        vals=sorted([grid.getCellValue([x,y]) for x in range(self.s) for y in range(self.s)])
+        mutil=0
+        for x in range(len(vals)-1):
+            v= vals[x]
+            u=vals[x+1]
+            if u==0 or v==0 or v==u:
+                continue
+            c= u/v
+            mutil+= math.log(c,2)
+            #given current board, if all the values were in order what would
+            #the utility be. Use this to normalize
+        if mutil==0:
+            mutil=1
+        util=util/mutil
         return util
     def weight_matrix(self, grid):
         #this is a bit trickier, idea is to want to put things as a triangle out from the bottom left
@@ -84,47 +97,28 @@ class PlayerAI(BaseAI):
 #for right now give the weights as they are, then fix them later
 #will take as an input for the run
 
-    def expectimax(self, grid, depth=0):
-        
+    def expectimax(self, grid, depth=1, alpha=float('-inf'), beta=float('inf'), found_move=False):
+        #will perform search on a config to a given depth
+        #idea is to implement s.t. IDS can be used 
+        #default searching to depth 1
+        #output to dictionary to 
+        good_move=None
         moveset=grid.getAvailableMoves()
         cs=self.generate_player_children(moveset, grid)
-        maxu=0
-        bestmove=None
-        if time.process_time()>= self.t_end:
-            for c in cs:
-                u=self.util(c[1])
-                if u > maxu or (maxu==0 and u==0):
-                    maxu=u
-                    bestmove=c[0]
-            return bestmove, maxu
+        if depth=0 and found_move:
+            utility=self.util(grid)
+            output={"alpha": alpha, 
+                    "beta": beta,
+                    "move": good_move, 
+                    "utility": utility}
+            return output
 
-        for c in cs:
-            u=self.chance(c[1], depth+1)
-            if u >maxu or (maxu==0 and u==0):
-                maxu=u
-                bestmove=c[0]
-        return bestmove, maxu
-    def chance(self, grid, depth=0):
-        nempt=self.empty_cells(grid)
-        if time.process_time() >=self.t_end or depth>=100:
-            return self.util(grid)
-        if nempt==0:
-            _, u = self.expectimax(grid, depth+1)
-            return u
-        poss=[]
-        chance_2=(0.9*(1/nempt))
-        chance_4=(0.1*(1/nempt))
-        for e in grid.getAvailableCells():
-            poss.append([e, 2, chance_2])
-            poss.append([e, 4, chance_4])
-        usum=0
-        for t in poss:
-            chance_grid=grid.clone()
-            chance_grid.insertTile(t[0], t[1])
-            _, u =self.expectimax(chance_grid)
-            usum+=u*t[2]
-        return usum
-        
+        if found_move:
+            for c in cs:
+                d=expectimax(c[1], depth-1)
+                alpha=max(alpha, d["alpha"])
+        else:
+
     def generate_player_children(self, moveset, grid):
         children_grids=[]
         for m in moveset:
